@@ -14,6 +14,8 @@ var database = client.GetDatabase(databaseName);
 
 builder.Services.AddSingleton(database);
 
+var jwtKey = builder.Configuration["Jwt:Key"];
+
 // Configuración de Autenticación JWT (Evita el error 500 al usar [Authorize])
 builder.Services.AddAuthentication(options =>
 {
@@ -29,8 +31,8 @@ builder.Services.AddAuthentication(options =>
         ValidateLifetime = true,
         ValidateIssuerSigningKey = true,
         IssuerSigningKey = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes("ClaveSuperSecretaDePrueba_32CaracteresMinimo!")
-        )
+            Encoding.UTF8.GetBytes(jwtKey!)
+            )
     };
 });
 
