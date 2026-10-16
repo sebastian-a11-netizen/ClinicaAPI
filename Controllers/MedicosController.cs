@@ -1,103 +1,100 @@
 using Microsoft.AspNetCore.Mvc;
 using MongoDB.Driver;
+using MongoDB.Bson;
 using ClinicaAPI.Models;
-using Microsoft.AspNetCore.Authorization;
 
 namespace ClinicaAPI.Controllers;
 
-[Authorize]
 [ApiController]
 [Route("api/[controller]")]
 public class MedicosController : ControllerBase
 {
-    private readonly IMongoCollection<Medico> _medicos;
+private readonly IMongoCollection<Medico> _medicos;
 
-    public MedicosController(IMongoDatabase database)
-    {
-        _medicos = database.GetCollection<Medico>("medicos");
-    }
 
-    [HttpGet]
-    public async Task<ActionResult<List<Medico>>> ObtenerMedicos()
-    {
-        var medicos = await _medicos
-            .Find(_ => true)
-            .ToListAsync();
+public MedicosController(IMongoDatabase database)
+{
+    _medicos = database.GetCollection<Medico>("medicos");
+}
 
-        return Ok(medicos);
-    }
+[HttpGet]
+public async Task<ActionResult<List<Medico>>> ObtenerMedicos()
+{
+    var medicos = await _medicos
+        .Find(_ => true)
+        .ToListAsync();
 
-    [HttpGet("{documento}")]
-    public async Task<ActionResult<Medico>> ObtenerMedicoPorDocumento(string documento)
-    {
-        var medico = await _medicos
-            .Find(m => m.Documento == documento)
-            .FirstOrDefaultAsync();
+    return Ok(medicos);
+}
 
-        if (medico == null)
-        {
-            return NotFound($"No se encontró un médico con el documento {documento}");
-        }
+[HttpGet("{id}")]
+public async Task<ActionResult<Medico>> ObtenerMedicoPorId(string id)
+{
+    if (!ObjectId.TryParse(id, out _))
+        return BadRequest("El ID no tiene un formato válido.");
 
-        return Ok(medico);
-    }
+    var medico = await _medicos.Find(m => m.Id == id).FirstOrDefaultAsync();
 
-    [HttpPost]
-    public async Task<ActionResult<Medico>> CrearMedico(Medico medico)
-    {
-        await _medicos.InsertOneAsync(medico);
+    if (medico == null)
+        return NotFound($"No se encontró un médico con el Id: {id}.");
 
-        return Ok(medico);
-    }
+    return Ok(medico);
+}
 
-    [HttpPut("{documento}")]
-    public async Task<ActionResult<Medico>> ActualizarMedico(
-        string documento,
-        Medico medico)
-    {
-        var medicoExistente = await _medicos
-            .Find(m => m.Documento == documento)
-            .FirstOrDefaultAsync();
+[HttpPost]
+public async Task<ActionResult<Medico>> CrearMedico(Medico medico)
+{
+    medico.Id = null;
 
-        if (medicoExistente == null)
-        {
-            return NotFound($"No se encontró un médico con el documento {documento}");
-        }
+    await _medicos.InsertOneAsync(medico);
 
-        medico.Id = medicoExistente.Id;
-        medico.Documento = documento;
+    return Ok(medico);
+}
 
-        var resultado = await _medicos.ReplaceOneAsync(
-            m => m.Documento == documento,
-            medico);
+[HttpPut("{id}")]
+public async Task<ActionResult<Medico>> ActualizarMedico(
+    string id,
+    Medico medico)
+{
+    if (!ObjectId.TryParse(id, out _))
+        return BadRequest("El ID no tiene un formato válido.");
 
-        if (resultado.ModifiedCount == 0)
-        {
-            return BadRequest("No se pudo actualizar el médico");
-        }
+    var medicoExistente = await _medicos
+        .Find(m => m.Id == id)
+        .FirstOrDefaultAsync();
 
-        return Ok(medico);
-    }
+    if (medicoExistente == null)
+        return NotFound("No se encontró el médico.");
 
-    [HttpDelete("{documento}")]
-    public async Task<ActionResult> DesactivarMedico(string documento)
-    {
-        var filtro = Builders<Medico>.Filter.Eq(m => m.Documento, documento);
+    medico.Id = id;
 
-        var actualizacion = Builders<Medico>.Update
-            .Set(m => m.Activo, false);
+    var resultado = await _medicos.ReplaceOneAsync(
+        m => m.Id == id,
+        medico);
 
-        var resultado = await _medicos.UpdateOneAsync(
-            filtro,
-            actualizacion);
+    if (resultado.MatchedCount == 0)
+        return NotFound("No se encontró el médico.");
 
-        if (resultado.MatchedCount == 0)
-        {
-            return NotFound(
-                $"No se encontró un médico con el documento {documento}");
-        }
+    return Ok(medico);
+}
 
-        return Ok(
-            $"El médico {documento} fue desactivado correctamente");
-    }
+
+[HttpDelete("{id}")]
+public async Task<ActionResult> EliminarMedico(string id)
+{
+    if (!ObjectId.TryParse(id, out _))
+        return BadRequest("El ID no tiene un formato válido.");
+
+    var resultado = await _medicos.DeleteOneAsync(
+        m => m.Id == id
+    );
+
+    if (resultado.DeletedCount == 0)
+        return NotFound("No se encontró el médico.");
+
+    return Ok("El médico fue eliminado correctamente.");
+}
+
+
+
 }

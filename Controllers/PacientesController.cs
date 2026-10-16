@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using MongoDB.Driver;
+using MongoDB.Bson;
 using ClinicaAPI.Models;
 
 namespace ClinicaAPI.Controllers;
@@ -18,7 +19,9 @@ public class PacientesController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<List<Paciente>>> ObtenerPacientes()
     {
-        var pacientes = await _pacientes.Find(_ => true).ToListAsync(); // Obtener todos los documentos
+        var pacientes = await _pacientes
+            .Find(_ => true)
+            .ToListAsync();
 
         return Ok(pacientes);
     }
@@ -31,65 +34,81 @@ public class PacientesController : ControllerBase
         return Ok(paciente);
     }
 
-    [HttpGet("{documento}")]
-    public async Task<ActionResult<Paciente>> ObtenerPacientePorDocumento(string documento)
+    [HttpGet("{id}")]
+    public async Task<ActionResult<Paciente>> ObtenerPacientePorId(string id)
     {
+        if (!ObjectId.TryParse(id, out _))
+        {
+            return BadRequest("El ID proporcionado no es válido");
+        }
+
         var paciente = await _pacientes
-            .Find(p => p.Documento == documento)
+            .Find(p => p.Id == id)
             .FirstOrDefaultAsync();
 
         if (paciente == null)
         {
-            return NotFound($"No se encontró un paciente con el documento {documento}");
+            return NotFound($"No se encontró un paciente con el ID {id}");
         }
 
         return Ok(paciente);
     }
 
-    [HttpPut("{documento}")]
+    [HttpPut("{id}")]
     public async Task<ActionResult<Paciente>> ActualizarPaciente(
-    string documento,
-    Paciente paciente)
+        string id,
+        Paciente paciente)
     {
+        if (!ObjectId.TryParse(id, out _))
+        {
+            return BadRequest("El ID proporcionado no es válido");
+        }
+
         var pacienteExistente = await _pacientes
-            .Find(p => p.Documento == documento)
+            .Find(p => p.Id == id)
             .FirstOrDefaultAsync();
 
         if (pacienteExistente == null)
         {
-            return NotFound($"No se encontró un paciente con el documento {documento}");
+            return NotFound($"No se encontró un paciente con el ID {id}");
         }
 
         paciente.Id = pacienteExistente.Id;
-        paciente.Documento = documento;
 
         var resultado = await _pacientes.ReplaceOneAsync(
-            p => p.Documento == documento,
+            p => p.Id == id,
             paciente);
 
-        if (resultado.ModifiedCount == 0)
+        if (resultado.MatchedCount == 0)
         {
-            return BadRequest("No se pudo actualizar el paciente");
+            return NotFound($"No se encontró un paciente con el ID {id}");
         }
 
         return Ok(paciente);
     }
 
-    [HttpDelete("{documento}")]
-    public async Task<ActionResult> DesactivarPaciente(string documento)
+    [HttpDelete("{id}")]
+    public async Task<ActionResult> DesactivarPaciente(string id)
     {
-        var filtro = Builders<Paciente>.Filter.Eq(p => p.Documento, documento);
+        if (!ObjectId.TryParse(id, out _))
+        {
+            return BadRequest("El ID proporcionado no es válido");
+        }
+
+        var filtro = Builders<Paciente>.Filter.Eq(p => p.Id, id);
 
         var actualizacion = Builders<Paciente>.Update
             .Set(p => p.Activo, false);
 
-        var resultado = await _pacientes.UpdateOneAsync(filtro, actualizacion);
+        var resultado = await _pacientes.UpdateOneAsync(
+            filtro,
+            actualizacion);
 
         if (resultado.MatchedCount == 0)
         {
-            return NotFound($"No se encontró un paciente con el documento {documento}");
+            return NotFound($"No se encontró un paciente con el ID {id}");
         }
 
-        return Ok($"El paciente {documento} fue desactivado correctamente");
+        return Ok($"El paciente {id} fue desactivado correctamente");
     }
 }
